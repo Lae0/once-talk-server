@@ -1,0 +1,118 @@
+user root;
+worker_processes  1;
+error_log /home/ouloba/usershare/carserver/conf/mongo/logs/error.log debug;
+
+events {
+    worker_connections 1024;
+}
+
+http {
+    upstream backend {
+        drizzle_server 127.0.0.1:3306 protocol=mysql
+                       dbname=test user=test password=123456;
+        drizzle_keepalive max=10 overflow=ignore mode=single;
+    }
+
+		 lua_shared_dict config 1m; 
+     lua_package_path "/home/ouloba/usershare/carserver/conf/mongo/?.lua;;";          
+		 init_by_lua_file /home/ouloba/usershare/carserver/conf/mongo/initlua.lua;
+
+    server {
+        listen 192.168.80.130:8080;
+        lua_code_cache off;
+        
+        
+        location /mysql {
+        		 internal;
+             drizzle_query $echo_request_body;
+             drizzle_pass backend;
+        }
+
+        location @cats-by-name {
+            set_unescape_uri $name $arg_name;
+            set_quote_sql_str $name;
+            drizzle_query 'select * from cats where name=$name';
+            drizzle_pass backend;
+            rds_json on;
+        }
+
+        location @cats-by-id {
+            set_quote_sql_str $id $arg_id;
+            drizzle_query 'select * from cats where id=$id';
+            drizzle_pass backend;
+            rds_json on;
+        }
+
+        location = /cats {
+            access_by_lua '
+                if ngx.var.arg_name then
+                    return ngx.exec("@cats-by-name")
+                end
+
+                if ngx.var.arg_id then
+                    return ngx.exec("@cats-by-id")
+                end
+            ';
+
+            rds_json_ret 400 "expecting \"name\" or \"id\" query arguments";
+        }
+        
+        location = /getid {         		
+		        content_by_lua_file /home/ouloba/usershare/carserver/conf/mongo/getid.lua; 
+		    }
+		    
+		    location = /chatto { 		    		
+		        content_by_lua_file /home/ouloba/usershare/carserver/conf/mongo/chatto.lua; 
+		    }
+		    
+		    location = /getchats { 		    		
+		        content_by_lua_file /home/ouloba/usershare/carserver/conf/mongo/getchats.lua; 
+		    }
+
+        location = /toimg {
+						set $arg_fromid $arg_fromid;
+						set $arg_toid   $arg_toid;					
+	          content_by_lua_file /home/ouloba/usershare/carserver/conf/mongo/saveimg.lua;
+          }
+          
+          location = /getimg {
+                        content_by_lua_file /home/ouloba/usershare/carserver/conf/mongo/getimg.lua;
+          }
+          
+        location = /mkgrp { 		    		
+		        content_by_lua_file /home/ouloba/usershare/carserver/conf/mongo/makegroup.lua; 
+		    }
+		    
+		    location = /getgrp { 		    		
+		        content_by_lua_file /home/ouloba/usershare/carserver/conf/mongo/getgroup.lua; 
+		    }
+		    
+		    location = /setgrp { 		    		
+		        content_by_lua_file /home/ouloba/usershare/carserver/conf/mongo/setgroup.lua; 
+		    }
+		    
+		    location = /joingrp { 		    		
+		        content_by_lua_file /home/ouloba/usershare/carserver/conf/mongo/joingroup.lua; 
+		    }
+		    
+		    location = /leavegrp { 		    		
+		        content_by_lua_file /home/ouloba/usershare/carserver/conf/mongo/leavegroup.lua; 
+		    }
+		    
+		    location = /destroygrp { 		    		
+		        content_by_lua_file /home/ouloba/usershare/carserver/conf/mongo/destroygroup.lua; 
+		    }
+		    
+		    location = /download { 		    		
+		        content_by_lua_file /home/ouloba/usershare/carserver/conf/mongo/download.lua; 
+		    }
+		    
+		    location = /register { 		    		
+		        content_by_lua_file /home/ouloba/usershare/carserver/conf/mongo/register.lua; 
+		    }
+		    
+		    location = /getcode { 		    		
+		        content_by_lua_file /home/ouloba/usershare/carserver/conf/mongo/getcode.lua; 
+		    }
+    }
+}
